@@ -1,0 +1,19 @@
+chip_api.settings_form:
+  path: '/admin/config/services/chip-api/settings'
+  defaults:
+    _form: '\Drupal\chip_api\Form\SettingsForm'
+    _title: 'Chip Api'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE
+
+chip_api.test_asin_form:
+  path: '/admin/config/services/chip-api/test-asin'
+  defaults:
+    _title: 'Test ASIN'
+    _form: '\Drupal\chip_api\Form\TestAsinForm'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE

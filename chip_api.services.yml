@@ -1,0 +1,4 @@
+services:
+  chip_api.chip_api:
+    class: Drupal\chip_api\ChipApi
+    arguments: []

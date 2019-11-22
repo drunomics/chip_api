@@ -1,0 +1,12 @@
+chip_api.settings_form:
+  title: 'Chip API'
+  route_name: chip_api.settings_form
+  description: 'Chip API settings'
+  parent: system.admin_config_services
+  weight: 99
+
+chip_api.test_asin_form:
+  title: 'Test ASIN number'
+  route_name: chip_api.test_asin_form
+  description: 'Shows data from Chip / BestCheck for a given ASIN using the API settings.'
+  parent: chip_api.settings_form

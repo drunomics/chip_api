@@ -1,0 +1,12 @@
+chip_api.settings_form:
+  title: 'Settings'
+  route_name: chip_api.settings_form
+  description: 'Chip API settings'
+  base_route: chip_api.settings_form
+  weight: -1
+
+chip_api.test_asin_form:
+  title: 'Test ASIN number'
+  route_name: chip_api.test_asin_form
+  description: 'Shows data from Chip / BestCheck for a given ASIN using the PA API settings.'
+  base_route: chip_api.settings_form
