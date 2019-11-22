@@ -1,0 +1,10 @@
+{
+    "name": "drupal/chip_api",
+    "type": "drupal-module",
+    "description": "Drupal helper for using the Chip BestCheck API.",
+    "license": "GPL-2.0+",
+    "require": {
+        "guzzlehttp/guzzle": "~6.1",
+        "php": ">=7.1.0"
+    }
+}
