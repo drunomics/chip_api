@@ -1,5 +1,5 @@
 {
-    "name": "drupal/chip_api",
+    "name": "drunomics/chip_api",
     "type": "drupal-module",
     "description": "Drupal helper for using the Chip BestCheck API.",
     "license": "GPL-2.0+",
