@@ -5,6 +5,7 @@ namespace Drupal\chip_api\Form;
 use Drupal\chip_api\ChipApiTrait;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Form\FormBase;
+use Drupal\facets\Exception\Exception;
 
 /**
  * Debug Chip Api response for an ASIN.
@@ -97,27 +98,34 @@ class TestAsinForm extends FormBase {
    *   Array with keys: errors => [], info => [] and response => [].
    */
   protected function fetchProductData($asin) {
-    $result = $this->getChipApi()->getProduct($asin);
+    $result = [
+      'info' => [],
+      'errors' => [],
+      'response' => NULL,
+    ];
+    try {
+      $result['response'] = $this->getChipApi()->getProduct($asin);
+    }
+    catch (\Exception $e) {
+      $this->getChipApi()->logException($e);
+      $result['errors'][] = $e->getMessage();
+    }
     if (!empty($result['response'])) {
       if (isset($result['response']['attributes'])) {
         $product_attributes = $result['response']['attributes'];
         // Multiple ASIN values per product.
         $result['info'][] = 'ASIN: ' . implode(', ', $product_attributes['asin']);
         $result['info'][] = 'Title: ' . $product_attributes['fullName'];
-        // TODO:
-        // $result['info'][] = 'Buying price: '
-        $result['info'][] = 'Price min: ' . $product_attributes['priceMin'];
-        $result['info'][] = 'Price max: ' . $product_attributes['priceMax'];
+        $prices = [];
+        foreach ($result['response']['offers'] as $offer) {
+          $prices[] = $offer['price'] . ' ' . $offer['currency'];
+        }
+        $label = count($result['response']['offers']) > 3
+          ? 'The cheapest 3 offers plus Amazon: '
+          : 'The cheapest 3 offers: ';
+        $result['info'][] = $label . implode(', ', $prices);
       }
-      // $result['response']['links']['self'] doesn't work ?!
       $result['info'][] = 'Detail Page URL: https://www.bestcheck.de/' . $result['response']['id'];
-    }
-
-    if (!empty($result['errors'])) {
-      $result['errors'] = [
-        'Printing first error object from list of errors:',
-        $result['errors'][0],
-      ];
     }
 
     return $result;

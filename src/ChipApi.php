@@ -5,7 +5,6 @@ namespace Drupal\chip_api;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Logger\LoggerChannelTrait;
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Service wrapper for Chip Api SDK.
@@ -17,7 +16,12 @@ class ChipApi {
   /**
    * API product URL in sprintf() format (/bc/{resourceType} filtered by ASIN).
    */
-  const API_PRODUCT_URL = 'https://bc-api.bestcheck.de/bc/product?filter%%5Basin.in%%5D=%s';
+  const API_BASE_URI = 'https://bc-api.bestcheck.de';
+
+  /**
+   * API version.
+   */
+  const API_VERSION = '1';
 
   /**
    * The settings keys in `chip_api.settings`.
@@ -41,53 +45,142 @@ class ChipApi {
   const ENV_PASSWORD  = 'CHIP_API_BA_PASSWORD';
 
   /**
-   * Gets the Chip API.
+   * The GuzzleHttp client.
    *
-   * @param string $asin
-   *  ASIN number.
-   *
-   * @return array().
-   *   Array with keys: errors => [], response => json.
+   * @var Client
    */
-  public function getProduct(string $asin) {
-    $result = [
-      'errors' => [],
-      'response' => NULL,
-    ];
+  private $client;
+
+  /**
+   * Constructor.
+   *
+   * @throws \Exception
+   */
+  public function __construct() {
+    // Initialize the GuzzleHttp client.
     $username = self::getUsername();
     $password = self::getPassword();
     if (empty($username) || empty($password)) {
-      $result['errors'][] = 'HTTP authentication must be configured';
-      return $result;
+      throw new \Exception('HTTP authentication must be configured');
+    }
+    $this->client = new Client([
+      'Accept' => 'application/json',
+      'auth' => [$username, $password],
+      'base_uri' => self::API_BASE_URI,
+    ]);
+  }
+
+  /**
+   * Loads and decodes a BestCheck API call.
+   *
+   * @param string $url
+   *   The relative URL.
+   * @param array $queryParameters
+   *   (optional) The query parameters.
+   *
+   * @return array
+   *   The decoded JSON response.
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   * @throws \Exception
+   */
+  private function request(string $url, array $queryParameters = array()) {
+    $options = !empty($queryParameters)
+      ? ['query' => $queryParameters]
+      : [];
+    $response = $this->client->request('GET', $url, $options);
+    $response = Json::decode((string) $response->getBody());
+    if (isset($response['errors'])) {
+      $errors = '';
+      foreach ($response['errors'] as $error) {
+        $errors .= $error['title'] . ': ' . $error['detail'] . "\n";
+      }
+      throw new \Exception($errors);
     }
 
-    $asin_lower = strtolower($asin);
-    $url = sprintf(self::API_PRODUCT_URL, $asin_lower);
+    return $response;
+  }
 
-    $client = new Client();
-    try {
-      $response = $client->request('GET', $url, [
-        'Accept' => 'application/json',
-        'auth' => [$username, $password],
-      ]);
-      $response = Json::decode((string) $response->getBody());
-      if (isset($response['errors'])) {
-        foreach ($response['errors'] as $error) {
-          $result['errors'][] = $error['title'] . ': ' . $error['detail'];
+  /**
+   * Gets the Chip API product information.
+   *
+   * @param string $asin
+   *   ASIN number.
+   *
+   * @return array().
+   *   The product information.
+   *
+   * @throws \Exception
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   */
+  public function getProduct(string $asin) {
+    // Get product info.
+    // /bc/product?filter[asin.in]=...
+    $queryParameters = [
+      'filter' => [
+        'asin.in' => strtolower($asin),
+      ],
+      'fields' => [
+        'product' => 'name,fullName,asin',
+      ],
+    ];
+    $response = $this->request('/bc/product', $queryParameters);
+    if (!isset($response['meta'], $response['data'][0]) || $response['meta']['total'] != 1) {
+      throw new \Exception('No product identified for ASIN: ' . $asin);
+    }
+    $productInfo = $response['data'][0];
+    unset($response);
+    // Get prices / offers (from non-blacklisted merchants) because simply
+    // filtering the offers by ASIN in one step doesn't work :(
+    // /bc/apps/v1/cheapest_offers?filter[product.id.in]=...&offerCount=3
+    // The cheapest 3 offers.
+    $queryParameters = [
+      'filter' => [
+        'product.id.in' => $productInfo['id'],
+      ],
+      'offerCount' => 3,
+      'fields' => [
+        'offer' => 'description,price,currency,deeplink,merchant',
+        'merchant' => 'name,url,active',
+      ],
+    ];
+    $url = sprintf('/bc/apps/v%s/cheapest_offers', self::API_VERSION);
+    $response = $this->request($url, $queryParameters);
+    if (!isset($response['meta'], $response['data']) || empty($response['data'])) {
+      throw new \Exception('No offers identified for ASIN: ' . $asin);
+    }
+    foreach ($response['data'] as $offer) {
+      $productInfo['offers'][$offer['id']] = $offer['attributes'];
+      $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
+    }
+    $addAmazon = TRUE;
+    foreach ($response['included'] as $included) {
+      if ($included['type'] == 'merchant') {
+        $productInfo['merchants'][$included['id']] = $included['attributes'];
+        if ($included['attributes']['name'] == 'Amazon') {
+          $addAmazon = FALSE;
         }
       }
-      elseif (isset($response['meta'], $response['data'][0]) && $response['meta']['total'] == 1) {
-        $result['response'] = $response['data'][0];
-      }
-      else {
-        $result['errors'][] = 'No product identified for ASIN: ' . $asin;
-      }
     }
-    catch (GuzzleException $e) {
-      $result['errors'][] = $e->getMessage();
+    if ($addAmazon) {
+      // The cheapest offer from Amazon.
+      $queryParameters['filter']['merchant.name.in'] = 'Amazon';
+      $queryParameters['offerCount'] = 1;
+      $response = $this->request($url, $queryParameters);
+      if (!isset($response['meta'], $response['data'], $response['data'][0])) {
+        throw new \Exception('No Amazon offers identified for ASIN: ' . $asin);
+      }
+      $offer = $response['data'][0];
+      $productInfo['offers'][$offer['id']] = $offer['attributes'];
+      $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
+      foreach ($response['included'] as $included) {
+        if ($included['type'] == 'merchant') {
+          $productInfo['merchants'][$included['id']] = $included['attributes'];
+        }
+      }
     }
 
-    return $result;
+    return $productInfo;
   }
 
   /**
