@@ -132,13 +132,14 @@ class ChipApi {
     unset($response);
     // Get prices / offers (from non-blacklisted merchants) because simply
     // filtering the offers by ASIN in one step doesn't work :(
-    // /bc/apps/v1/cheapest_offers?filter[product.id.in]=...&offerCount=3
-    // The cheapest 3 offers.
+    // The cheapest 3 offers, one per provider. Get the first 10 bcs a provider
+    // can be present more than once. Also fetch merchant info.
+    // /bc/apps/v1/cheapest_offers?filter[product.id.in]=...&offerCount=10
     $queryParameters = [
       'filter' => [
         'product.id.in' => $productInfo['id'],
       ],
-      'offerCount' => 3,
+      'offerCount' => 10,
       'fields' => [
         'offer' => 'description,price,currency,deeplink,merchant',
         'merchant' => 'name,url,active',
@@ -149,21 +150,43 @@ class ChipApi {
     if (!isset($response['meta'], $response['data']) || empty($response['data'])) {
       throw new \Exception('No offers identified for ASIN: ' . $asin);
     }
-    foreach ($response['data'] as $offer) {
-      $productInfo['offers'][$offer['id']] = $offer['attributes'];
-      $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
-    }
-    $addAmazon = TRUE;
+    // Get cheapest 3 (but only one per merchant) and eventually Amazon.
+    $fetchAmazonPrice = TRUE;
+    $merchants = [];
     foreach ($response['included'] as $included) {
       if ($included['type'] == 'merchant') {
-        $productInfo['merchants'][$included['id']] = $included['attributes'];
+        $merchants[$included['id']] = $included['attributes'];
         if ($included['attributes']['name'] == 'Amazon') {
-          $addAmazon = FALSE;
+          $fetchAmazonPrice = FALSE;
         }
       }
     }
-    if ($addAmazon) {
-      // The cheapest offer from Amazon.
+    $addAmazonPrice = !$fetchAmazonPrice;
+    $countNonAmazonPrices = 0;
+    foreach ($response['data'] as $offer) {
+      $merchantId = $offer['relationships']['merchant']['data'][0]['id'];
+      if (isset($productInfo['merchants'][$merchantId])) {
+        // Skip prices after the first for the same merchant.
+        continue;
+      }
+      $isFirstAmazonPrice = $addAmazonPrice && $merchants[$merchantId]['name'] == 'Amazon';
+      if ($isFirstAmazonPrice || $countNonAmazonPrices < 3) {
+        $productInfo['offers'][$offer['id']] = $offer['attributes'];
+        $productInfo['offers'][$offer['id']]['merchant'] = $merchantId;
+        $productInfo['merchants'][$merchantId] = $merchants[$merchantId];
+        if ($isFirstAmazonPrice) {
+          $addAmazonPrice = FALSE;
+        }
+        else {
+          $countNonAmazonPrices++;
+        }
+      }
+      if ($countNonAmazonPrices == 3 && !$addAmazonPrice) {
+        break;
+      }
+    }
+    if ($fetchAmazonPrice) {
+      // Fetch and add the cheapest offer from Amazon.
       $queryParameters['filter']['merchant.name.in'] = 'Amazon';
       $queryParameters['offerCount'] = 1;
       $response = $this->request($url, $queryParameters);
@@ -294,3 +317,4 @@ class ChipApi {
   }
 
 }
+
