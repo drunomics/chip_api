@@ -104,29 +104,41 @@ class ChipApi {
   /**
    * Gets the Chip API product information.
    *
-   * @param string $asin
-   *   ASIN number.
+   * @param string $code
+   *   ASIN (10 letters and/or numbers) or GTIN-13 (EAN/UCC-13, 13 digits).
    *
    * @return array().
    *   The product information.
    *
    * @throws \Exception
+   * @throws \InvalidArgumentException
    * @throws \GuzzleHttp\Exception\GuzzleException
    */
-  public function getProduct(string $asin) {
+  public function getProduct(string $code) {
     // Get product info.
-    // /bc/product?filter[asin.in]=...
+    // /bc/product?filter[asin|gtin.in]=...
     $queryParameters = [
-      'filter' => [
-        'asin.in' => strtolower($asin),
-      ],
+      'filter' => [],
       'fields' => [
-        'product' => 'name,fullName,asin',
+        'product' => 'name,fullName,asin,gtins',
       ],
     ];
+    // ASIN (10 alphanumeric) or GTIN-13 (EAN/UCC-13, 13 digits).
+    preg_match('/^([[:alnum:]]{10})$|^(\d{13})$/D', $code, $matches);
+    if (!empty($matches[1])) {
+      // The code has ASIN format.
+      $queryParameters['filter']['asin.in'] = strtolower($code);
+    }
+    elseif (!empty($matches[2])) {
+      // The code has EAN format.
+      $queryParameters['filter']['gtin.in'] = $code;
+    }
+    else {
+      throw new \InvalidArgumentException('Invalid ASIN or EAN.');
+    }
     $response = $this->request('/bc/product', $queryParameters);
     if (!isset($response['meta'], $response['data'][0]) || $response['meta']['total'] != 1) {
-      throw new \Exception('No product identified for ASIN: ' . $asin);
+      throw new \Exception('No product identified for: ' . $code);
     }
     $productInfo = $response['data'][0];
     unset($response);
@@ -134,7 +146,7 @@ class ChipApi {
     // filtering the offers by ASIN in one step doesn't work :(
     // The cheapest 3 offers, one per provider. Get the first 10 bcs a provider
     // can be present more than once. Also fetch merchant info.
-    // /bc/apps/v1/cheapest_offers?filter[product.id.in]=...&offerCount=10
+    // /bc/apps/v{version}/cheapest_offers?filter[product.id.in]=...&offerCount=10
     $queryParameters = [
       'filter' => [
         'product.id.in' => $productInfo['id'],
@@ -148,7 +160,7 @@ class ChipApi {
     $url = sprintf('/bc/apps/v%s/cheapest_offers', self::API_VERSION);
     $response = $this->request($url, $queryParameters);
     if (!isset($response['meta'], $response['data']) || empty($response['data'])) {
-      throw new \Exception('No offers identified for ASIN: ' . $asin);
+      throw new \Exception('No offers identified for: ' . $code);
     }
     // Get cheapest 3 (but only one per merchant) and eventually Amazon.
     $fetchAmazonPrice = TRUE;
@@ -186,19 +198,18 @@ class ChipApi {
       }
     }
     if ($fetchAmazonPrice) {
-      // Fetch and add the cheapest offer from Amazon.
+      // Fetch and add the cheapest offer from Amazon (if found).
       $queryParameters['filter']['merchant.name.in'] = 'Amazon';
       $queryParameters['offerCount'] = 1;
       $response = $this->request($url, $queryParameters);
-      if (!isset($response['meta'], $response['data'], $response['data'][0])) {
-        throw new \Exception('No Amazon offers identified for ASIN: ' . $asin);
-      }
-      $offer = $response['data'][0];
-      $productInfo['offers'][$offer['id']] = $offer['attributes'];
-      $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
-      foreach ($response['included'] as $included) {
-        if ($included['type'] == 'merchant') {
-          $productInfo['merchants'][$included['id']] = $included['attributes'];
+      if (isset($response['meta'], $response['data'], $response['data'][0])) {
+        $offer = $response['data'][0];
+        $productInfo['offers'][$offer['id']] = $offer['attributes'];
+        $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
+        foreach ($response['included'] as $included) {
+          if ($included['type'] == 'merchant') {
+            $productInfo['merchants'][$included['id']] = $included['attributes'];
+          }
         }
       }
     }

@@ -10,7 +10,7 @@ use Drupal\facets\Exception\Exception;
 /**
  * Debug Chip Api response for an ASIN.
  */
-class TestAsinForm extends FormBase {
+class TestForm extends FormBase {
 
   use ChipApiTrait;
 
@@ -18,7 +18,7 @@ class TestAsinForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'chip_api_test_asin';
+    return 'chip_api_test_code';
   }
 
   /**
@@ -26,36 +26,39 @@ class TestAsinForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $form = [
-      '#title' => $this->t('Chip Api ASIN response'),
+      '#title' => $this->t('Chip Api response'),
     ];
 
     $form['description'] = [
       '#markup' => $this->t('Shows the API response for a product request.'),
     ];
 
-    if (!empty($_SESSION['chip_api.debug_asin.response'])) {
+    if (!empty($_SESSION['chip_api.debug.response'])) {
       // Note:  var_export uses the serialize_precision ini setting, thus
       // var_export(497.2) will output 497.19999999999999.
       $form['debug_output'] = [
         '#type' => 'textarea',
         '#title' => $this->t('Response'),
-        '#default_value' => var_export($_SESSION['chip_api.debug_asin.response'], TRUE),
+        '#default_value' => var_export($_SESSION['chip_api.debug.response'], TRUE),
         '#rows' => 20,
         '#attributes' => [
           'disabled' => 'disabled',
         ],
       ];
 
-      unset($_SESSION['chip_api.debug_asin.response']);
+      unset($_SESSION['chip_api.debug.response']);
     }
 
-    $form['asin'] = [
+    $form['code'] = [
       '#type' => 'textfield',
-      '#title' => 'ASIN',
+      '#title' => 'ASIN / EAN code',
       '#size' => 20,
       '#maxlength' => 20,
       '#required' => TRUE,
-      '#description' => $this->t("Amazon Standard Identification Numbers (ASINs) are unique blocks of 10 letters and/or numbers that identify items.<BR>You can find the ASIN on the item's product information page at Amazon."),
+      '#description' =>
+        $this->t("<em>Amazon Standard Identification Numbers (ASINs)</em> are unique blocks of 10 letters and/or numbers that identify items.<br>You can find the ASIN on the item's product information page at Amazon.")
+        . '<br>'
+        . $this->t('<em>European Article Number (EAN)</em> using the thirteen-digit EAN-13 standard.'),
     ];
 
     $form['execute']['actions'] = ['#type' => 'actions'];
@@ -71,10 +74,10 @@ class TestAsinForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $asin = $form_state->getValue('asin');
-    $result = $this->fetchProductData($asin);
+    $code = $form_state->getValue('code');
+    $result = $this->fetchProductData($code);
     if (!empty($result['response'])) {
-      $_SESSION['chip_api.debug_asin.response'] = $result['response'];
+      $_SESSION['chip_api.debug.response'] = $result['response'];
     }
     if (!empty($result['info'])) {
       foreach ($result['info'] as $info) {
@@ -91,20 +94,22 @@ class TestAsinForm extends FormBase {
   /**
    * Fetches product data from Chip.
    *
-   * @param string $asin
-   *   ASIN number.
+   * @param string $code
+   *   ASIN (10 letters and/or numbers) or GTIN-13 (EAN/UCC-13, 13 digits).
    *
    * @return array
    *   Array with keys: errors => [], info => [] and response => [].
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
    */
-  protected function fetchProductData($asin) {
+  protected function fetchProductData($code) {
     $result = [
       'info' => [],
       'errors' => [],
       'response' => NULL,
     ];
     try {
-      $result['response'] = $this->getChipApi()->getProduct($asin);
+      $result['response'] = $this->getChipApi()->getProduct($code);
     }
     catch (\Exception $e) {
       $this->getChipApi()->logException($e);
@@ -115,6 +120,7 @@ class TestAsinForm extends FormBase {
         $product_attributes = $result['response']['attributes'];
         // Multiple ASIN values per product.
         $result['info'][] = 'ASIN: ' . implode(', ', $product_attributes['asin']);
+        $result['info'][] = 'EAN: ' . implode(', ', $product_attributes['gtins']);
         $result['info'][] = 'Title: ' . $product_attributes['fullName'];
         $prices = [];
         foreach ($result['response']['offers'] as $offer) {
