@@ -186,13 +186,10 @@ class ChipApi {
       }
     }
     if ($fetchAmazonPrice) {
-      // Fetch and add the cheapest offer from Amazon.
+      // Fetch and add the cheapest offer from Amazon (if found).
       $queryParameters['filter']['merchant.name.in'] = 'Amazon';
       $queryParameters['offerCount'] = 1;
       $response = $this->request($url, $queryParameters);
-      if (!isset($response['meta'], $response['data'], $response['data'][0])) {
-        throw new \Exception('No Amazon offers identified for ASIN: ' . $asin);
-      }
       $offer = $response['data'][0];
       $productInfo['offers'][$offer['id']] = $offer['attributes'];
       $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
