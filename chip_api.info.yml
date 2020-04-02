@@ -1,6 +1,6 @@
-name: Amazon Product Advertising API
+name: Chip API products
 type: module
-description: Drupal helper for using the Amazon Product Advertising API 5 SDK.
+description: Drupal helper for using the Chip API / BestCheck.de.
 core: 8.x
-package: Amazon
+package: Chip.de
 configure: chip_api.settings_form
