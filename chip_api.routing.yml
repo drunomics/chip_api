@@ -9,11 +9,11 @@ chip_api.settings_form:
     _admin_route: TRUE
 
 chip_api.test_asin_form:
-  path: '/admin/config/services/chip-api/test-asin'
+  path: '/admin/config/services/chip-api/test'
   defaults:
     _title: 'Test ASIN'
     _form: '\Drupal\chip_api\Form\TestAsinForm'
   requirements:
-    _permission: 'administer site configuration'
+    _permission: 'access test form'
   options:
     _admin_route: TRUE
