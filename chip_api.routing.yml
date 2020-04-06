@@ -14,6 +14,6 @@ chip_api.test_form:
     _title: 'Test ASIN / EAN'
     _form: '\Drupal\chip_api\Form\TestForm'
   requirements:
-    _permission: 'administer site configuration'
+    _permission: 'access test form'
   options:
     _admin_route: TRUE
