@@ -8,7 +8,7 @@ chip_api.settings_form:
   options:
     _admin_route: TRUE
 
-chip_api.test_asin_form:
+chip_api.test_form:
   path: '/admin/config/services/chip-api/test'
   defaults:
     _title: 'Test ASIN'
