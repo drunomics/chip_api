@@ -1,3 +1,4 @@
-access test form:
-  title: 'Access test form'
-  description: 'Access the test form.'
+access chip_api test form:
+  title: 'Access Chip API test form'
+  description: 'Access the Chip API test form.'
+

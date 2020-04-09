@@ -1,7 +1,7 @@
 chip_api.test_form:
   title: 'Test ASIN / EAN'
   route_name: chip_api.test_form
-  description: 'Shows data from Chip / BestCheck for a given ASIN / EAN using the PA API settings.'
+  description: 'Shows data from Chip / BestCheck for a given ASIN / EAN using the API settings.'
   base_route: chip_api.test_form
 
 chip_api.settings_form:
