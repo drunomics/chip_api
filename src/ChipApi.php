@@ -190,12 +190,14 @@ class ChipApi {
       $queryParameters['filter']['merchant.name.in'] = 'Amazon';
       $queryParameters['offerCount'] = 1;
       $response = $this->request($url, $queryParameters);
-      $offer = $response['data'][0];
-      $productInfo['offers'][$offer['id']] = $offer['attributes'];
-      $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
-      foreach ($response['included'] as $included) {
-        if ($included['type'] == 'merchant') {
-          $productInfo['merchants'][$included['id']] = $included['attributes'];
+      if (isset($response['data'][0])) {
+        $offer = $response['data'][0];
+        $productInfo['offers'][$offer['id']] = $offer['attributes'];
+        $productInfo['offers'][$offer['id']]['merchant'] = $offer['relationships']['merchant']['data'][0]['id'];
+        foreach ($response['included'] as $included) {
+          if ($included['type'] == 'merchant') {
+            $productInfo['merchants'][$included['id']] = $included['attributes'];
+          }
         }
       }
     }
