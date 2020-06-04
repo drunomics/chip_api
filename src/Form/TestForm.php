@@ -131,6 +131,9 @@ class TestForm extends FormBase {
           : 'The cheapest 3 offers: ';
         $result['info'][] = $label . implode(', ', $prices);
       }
+      if (isset($result['response']['offers'])) {
+        $result['info'][] = 'Offer IDs: ' . implode(', ', array_keys(($result['response']['offers'])));
+      }
       $result['info'][] = 'Detail Page URL: https://www.bestcheck.de/' . $result['response']['id'];
     }
 
